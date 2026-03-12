@@ -1,31 +1,39 @@
-import LoginPage from "./LoginPage";
 import { useState, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, Legend
+  PieChart, Pie, Cell,
 } from "recharts";
+import LoginPage from "./LoginPage";   // ← JWT: Import Login
 
 // ──────────────────────────────────────────────
-//YOUR LIVE FASTAPI BACKEND
+// 🔌 FASTAPI BACKEND URL
 // ──────────────────────────────────────────────
 const API_BASE = "https://employee-api-f3hl.onrender.com";
 
+// ──────────────────────────────────────────────
+// 🔑 JWT: Helper to always get latest token
+// ──────────────────────────────────────────────
 const getToken = () => localStorage.getItem("jwt_token");
 
+// ──────────────────────────────────────────────
+// 🔌 API SERVICE — All calls include JWT token
+// MuleSoft analogy: HTTP Request connector
+// with Authorization header on every call
+// ──────────────────────────────────────────────
 const api = {
   getAll: () => fetch(`${API_BASE}/api/employees`, {
-    headers: { "Authorization": `Bearer ${getToken()}` }     // ← ADD header
+    headers: { "Authorization": `Bearer ${getToken()}` }
   }).then(r => r.json()),
 
   getStats: () => fetch(`${API_BASE}/api/stats`, {
-    headers: { "Authorization": `Bearer ${getToken()}` }     // ← ADD header
+    headers: { "Authorization": `Bearer ${getToken()}` }
   }).then(r => r.json()),
 
   create: (data) => fetch(`${API_BASE}/api/employees`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${getToken()}`                // ← ADD header
+      "Content-Type":  "application/json",
+      "Authorization": `Bearer ${getToken()}`
     },
     body: JSON.stringify(data)
   }).then(r => r.json()),
@@ -33,18 +41,21 @@ const api = {
   update: (id, data) => fetch(`${API_BASE}/api/employees/${id}`, {
     method: "PUT",
     headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${getToken()}`                // ← ADD header
+      "Content-Type":  "application/json",
+      "Authorization": `Bearer ${getToken()}`
     },
     body: JSON.stringify(data)
   }).then(r => r.json()),
 
   delete: (id) => fetch(`${API_BASE}/api/employees/${id}`, {
     method: "DELETE",
-    headers: { "Authorization": `Bearer ${getToken()}` }     // ← ADD header
+    headers: { "Authorization": `Bearer ${getToken()}` }
   }).then(r => r.json()),
 };
 
+// ──────────────────────────────────────────────
+// CONSTANTS
+// ──────────────────────────────────────────────
 const DEPT_COLORS = {
   Engineering: "#5B8BDF",
   Integration: "#C8A96E",
@@ -58,12 +69,21 @@ const statusOptions = ["Active","On Leave","Inactive"];
 const deptOptions   = ["Engineering","Integration","Analytics","Product","Design"];
 const empty         = { name:"", role:"", department:"Engineering", salary:"", status:"Active", email:"", joined:"" };
 
+const avatarColors = [
+  ["#EEF3FF","#5B8BDF"],["#FFF5E6","#C8A96E"],["#EEF9F2","#4CAF82"],
+  ["#F5EEF8","#9B72CF"],["#FFEEEE","#E07070"],["#E6F7FF","#3BA8D8"]
+];
+
+const getInitials = name => name?.split(" ").map(n => n[0]).join("").toUpperCase().slice(0,2) || "?";
+const statusKey   = s => s?.replace(" ","") || "";
+
+// ──────────────────────────────────────────────
+// STYLES
+// ──────────────────────────────────────────────
 const styles = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'DM Sans',sans-serif;background:#F7F6F2;color:#1a1a1a}
-
-  /* SIDEBAR */
   .sidebar{position:fixed;top:0;left:0;width:230px;height:100vh;background:#1C1C1E;display:flex;flex-direction:column;z-index:100}
   .sidebar-logo{padding:28px 24px 24px;border-bottom:1px solid rgba(255,255,255,0.08)}
   .sidebar-logo h1{font-family:'Playfair Display',serif;font-size:20px;color:#fff;font-weight:700}
@@ -80,11 +100,9 @@ const styles = `
   .user-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#C8A96E,#e0c48a);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#1C1C1E;flex-shrink:0}
   .user-name{font-size:13px;font-weight:500;color:rgba(255,255,255,0.7)}
   .user-role{font-size:11px;color:rgba(255,255,255,0.3)}
-
-  /* MAIN */
+  .btn-logout{width:100%;margin-top:8px;padding:8px;background:transparent;border:1.5px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.4);cursor:pointer;font-size:12.5px;font-family:'DM Sans',sans-serif;transition:all .15s}
+  .btn-logout:hover{color:rgba(255,255,255,0.8);border-color:rgba(255,255,255,0.3)}
   .main{margin-left:230px;padding:36px 40px}
-
-  /* TOPBAR */
   .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:36px}
   .topbar-left h2{font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:#1C1C1E;letter-spacing:-0.5px}
   .topbar-left p{font-size:13.5px;color:#888;margin-top:4px;display:flex;align-items:center;gap:8px}
@@ -96,8 +114,6 @@ const styles = `
   .search-box input::placeholder{color:#bbb}
   .btn-primary{display:flex;align-items:center;gap:7px;background:#1C1C1E;color:#fff;border:none;padding:10px 18px;border-radius:10px;cursor:pointer;font-size:13.5px;font-weight:500;font-family:'DM Sans',sans-serif;transition:all .18s}
   .btn-primary:hover{background:#333;transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.15)}
-
-  /* STAT CARDS */
   .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
   .stat-card{background:#fff;border-radius:14px;padding:22px 24px;border:1.5px solid #EDECEA;position:relative;overflow:hidden;transition:transform .18s,box-shadow .18s}
   .stat-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.07)}
@@ -109,22 +125,14 @@ const styles = `
   .stat-label{font-size:11.5px;color:#999;text-transform:uppercase;letter-spacing:.8px;font-weight:500}
   .stat-value{font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:#1C1C1E;margin:6px 0 2px;line-height:1}
   .stat-sub{font-size:12px;color:#aaa}
-
-  /* ANALYTICS GRID */
   .analytics-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
-  .analytics-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-bottom:24px}
   .chart-card{background:#fff;border-radius:16px;border:1.5px solid #EDECEA;padding:24px;transition:box-shadow .18s}
   .chart-card:hover{box-shadow:0 8px 24px rgba(0,0,0,0.07)}
-  .chart-card.wide{grid-column:span 2}
   .chart-title{font-size:15px;font-weight:600;color:#1C1C1E;margin-bottom:4px}
   .chart-sub{font-size:12px;color:#aaa;margin-bottom:20px}
-
-  /* CUSTOM TOOLTIP */
-  .custom-tooltip{background:#1C1C1E;border-radius:10px;padding:10px 14px;border:none;box-shadow:0 8px 24px rgba(0,0,0,0.2)}
+  .custom-tooltip{background:#1C1C1E;border-radius:10px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.2)}
   .tooltip-label{font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:4px}
   .tooltip-value{font-size:15px;font-weight:600;color:#fff}
-
-  /* FILTER & TABLE */
   .filter-bar{display:flex;align-items:center;gap:8px;margin-bottom:20px;flex-wrap:wrap}
   .filter-chip{padding:6px 14px;border-radius:20px;border:1.5px solid #E8E6E0;background:#fff;font-size:12.5px;color:#666;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
   .filter-chip:hover{border-color:#C8A96E;color:#C8A96E}
@@ -162,8 +170,6 @@ const styles = `
   .btn-icon:hover{border-color:#C8A96E;color:#C8A96E;background:#FFF9F0}
   .btn-icon.delete:hover{border-color:#E07070;color:#E07070;background:#FFF0F0}
   .btn-icon svg{width:13px;height:13px}
-
-  /* MODAL */
   .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(3px);animation:fadeIn .18s ease}
   @keyframes fadeIn{from{opacity:0}to{opacity:1}}
   @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -184,8 +190,6 @@ const styles = `
   .btn-save{padding:10px 24px;border-radius:10px;border:none;background:#1C1C1E;font-size:13.5px;color:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500}
   .btn-save:hover{background:#333}
   .btn-save:disabled{opacity:.5;cursor:not-allowed}
-
-  /* MISC */
   .api-badge{display:inline-flex;align-items:center;gap:5px;background:#EEF9F2;color:#4CAF82;padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:500}
   .api-dot{width:6px;height:6px;border-radius:50%;background:#4CAF82;animation:pulse 1.5s infinite}
   .api-badge.error{background:#FFEEEE;color:#E07070}
@@ -196,108 +200,72 @@ const styles = `
   @keyframes spin{to{transform:rotate(360deg)}}
   .toast{position:fixed;bottom:24px;right:24px;background:#1C1C1E;color:#fff;padding:12px 20px;border-radius:10px;font-size:13.5px;font-weight:500;z-index:999;animation:slideUp .22s ease;box-shadow:0 8px 24px rgba(0,0,0,0.2)}
   .empty-state{text-align:center;padding:60px 20px;color:#bbb}
-  .empty-state p{font-size:14px;margin-top:8px}
-
-  /* PIE LEGEND */
+  .pie-wrap{display:flex;align-items:center;gap:24px}
   .pie-legend{display:flex;flex-direction:column;gap:10px;justify-content:center}
   .legend-item{display:flex;align-items:center;gap:8px;font-size:13px;color:#555}
   .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-  .legend-val{margin-left:auto;font-weight:600;color:#1C1C1E;font-size:13px}
-  .pie-wrap{display:flex;align-items:center;gap:24px}
-
-  /* SALARY TABLE IN ANALYTICS */
+  .legend-val{margin-left:auto;font-weight:600;color:#1C1C1E}
   .salary-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #F7F6F2}
   .salary-row:last-child{border-bottom:none}
   .salary-bar-wrap{flex:1;height:6px;background:#F0EEE9;border-radius:3px;overflow:hidden}
   .salary-bar{height:100%;border-radius:3px;transition:width .6s ease}
   .salary-label{font-size:13px;color:#555;width:110px;flex-shrink:0}
   .salary-amount{font-size:13px;font-weight:600;color:#1C1C1E;width:70px;text-align:right;flex-shrink:0}
-
   @media(max-width:900px){
     .sidebar{width:60px}
     .sidebar-logo h1,.sidebar-logo p,.nav-item span,.user-name,.user-role,.nav-label{display:none}
     .main{margin-left:60px;padding:24px 20px}
-    .stats-grid,.analytics-grid,.analytics-grid-3{grid-template-columns:1fr}
-    .chart-card.wide{grid-column:span 1}
+    .stats-grid,.analytics-grid{grid-template-columns:1fr}
   }
 `;
 
-const avatarColors = [
-  ["#EEF3FF","#5B8BDF"],["#FFF5E6","#C8A96E"],["#EEF9F2","#4CAF82"],
-  ["#F5EEF8","#9B72CF"],["#FFEEEE","#E07070"],["#E6F7FF","#3BA8D8"]
-];
-
-const getInitials = name => name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0,2);
-const statusKey   = s => s?.replace(" ","") || "";
-
-// ─────────────────────────────────────────────
-// CUSTOM CHART TOOLTIP
-// ─────────────────────────────────────────────
-function CustomTooltip({ active, payload, label, prefix="", suffix="" }) {
+// ──────────────────────────────────────────────
+// CUSTOM TOOLTIP FOR CHARTS
+// ──────────────────────────────────────────────
+function CustomTooltip({ active, payload, label, suffix="" }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="custom-tooltip">
       <div className="tooltip-label">{label}</div>
-      <div className="tooltip-value">{prefix}{payload[0].value?.toLocaleString()}{suffix}</div>
+      <div className="tooltip-value">{payload[0].value?.toLocaleString()}{suffix}</div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────
-// ANALYTICS PAGE
-// All charts pull from real FastAPI data!
-// ─────────────────────────────────────────────
+// ──────────────────────────────────────────────
+// ANALYTICS PAGE COMPONENT
+// ──────────────────────────────────────────────
 function AnalyticsPage({ employees, stats }) {
-
-  // ── CHART 1: Department headcount ───────────
-  // MuleSoft: DataWeave groupBy + sizeOf
   const deptData = Object.entries(stats.department_breakdown || {}).map(([dept, count]) => ({
     dept, count, fill: DEPT_COLORS[dept] || "#999"
   }));
 
-  // ── CHART 2: Status breakdown (Pie) ─────────
   const statusData = [
-    { name: "Active",   value: employees.filter(e => e.status === "Active").length,   fill: "#4CAF82" },
-    { name: "On Leave", value: employees.filter(e => e.status === "On Leave").length,  fill: "#C8A96E" },
-    { name: "Inactive", value: employees.filter(e => e.status === "Inactive").length,  fill: "#E8E6E0" },
+    { name:"Active",   value: employees.filter(e => e.status==="Active").length,   fill:"#4CAF82" },
+    { name:"On Leave", value: employees.filter(e => e.status==="On Leave").length, fill:"#C8A96E" },
+    { name:"Inactive", value: employees.filter(e => e.status==="Inactive").length, fill:"#E8E6E0" },
   ].filter(d => d.value > 0);
 
-  // ── CHART 3: Avg salary per department ──────
   const salaryByDept = Object.keys(DEPT_COLORS).map(dept => {
-    const deptEmps = employees.filter(e => e.department === dept);
-    const avg = deptEmps.length
-      ? Math.round(deptEmps.reduce((s,e) => s + Number(e.salary), 0) / deptEmps.length)
-      : 0;
+    const emps = employees.filter(e => e.department === dept);
+    const avg  = emps.length ? Math.round(emps.reduce((s,e) => s + Number(e.salary), 0) / emps.length) : 0;
     return { dept, avg, fill: DEPT_COLORS[dept] };
   }).filter(d => d.avg > 0);
 
-  const maxSalary = Math.max(...salaryByDept.map(d => d.avg));
-
-  // ── CHART 4: Salary distribution bins ───────
-  const bins = [
-    { range: "<$60k",   min: 0,      max: 60000  },
-    { range: "$60–75k", min: 60000,  max: 75000  },
-    { range: "$75–90k", min: 75000,  max: 90000  },
-    { range: ">$90k",   min: 90000,  max: Infinity},
-  ].map(b => ({
-    range: b.range,
-    count: employees.filter(e => Number(e.salary) >= b.min && Number(e.salary) < b.max).length
-  }));
+  const maxSalary = Math.max(...salaryByDept.map(d => d.avg), 1);
 
   return (
     <>
-      {/* ROW 1 — Bar chart (wide) + Pie chart */}
       <div className="analytics-grid">
-
-        {/* Department Headcount — Bar Chart */}
+        {/* Bar Chart — Department Headcount */}
         <div className="chart-card">
           <div className="chart-title">Headcount by Department</div>
-          <div className="chart-sub">Total employees in each team</div>
+          <div className="chart-sub">Total employees per team</div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={deptData} barSize={36}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F0EEE9" vertical={false}/>
-              <XAxis dataKey="dept" tick={{fontSize:12, fill:"#aaa"}} axisLine={false} tickLine={false}/>
-              <YAxis tick={{fontSize:12, fill:"#aaa"}} axisLine={false} tickLine={false} allowDecimals={false}/>
+              <XAxis dataKey="dept" tick={{fontSize:12,fill:"#aaa"}} axisLine={false} tickLine={false}/>
+              <YAxis tick={{fontSize:12,fill:"#aaa"}} axisLine={false} tickLine={false} allowDecimals={false}/>
               <Tooltip content={<CustomTooltip suffix=" people"/>}/>
               <Bar dataKey="count" radius={[6,6,0,0]}>
                 {deptData.map((d,i) => <Cell key={i} fill={d.fill}/>)}
@@ -306,15 +274,14 @@ function AnalyticsPage({ employees, stats }) {
           </ResponsiveContainer>
         </div>
 
-        {/* Status Breakdown — Pie Chart */}
+        {/* Pie Chart — Status Breakdown */}
         <div className="chart-card">
           <div className="chart-title">Staff Status Breakdown</div>
           <div className="chart-sub">Active vs On Leave vs Inactive</div>
           <div className="pie-wrap">
             <ResponsiveContainer width="55%" height={220}>
               <PieChart>
-                <Pie data={statusData} cx="50%" cy="50%" innerRadius={55} outerRadius={90}
-                  dataKey="value" strokeWidth={0}>
+                <Pie data={statusData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} dataKey="value" strokeWidth={0}>
                   {statusData.map((d,i) => <Cell key={i} fill={d.fill}/>)}
                 </Pie>
                 <Tooltip content={<CustomTooltip suffix=" staff"/>}/>
@@ -333,53 +300,31 @@ function AnalyticsPage({ employees, stats }) {
         </div>
       </div>
 
-      {/* ROW 2 — Salary by dept + Salary distribution */}
-      <div className="analytics-grid">
-
-        {/* Avg Salary per Department — Custom bars */}
-        <div className="chart-card">
-          <div className="chart-title">Average Salary by Department</div>
-          <div className="chart-sub">Compared across all teams</div>
-          <div style={{marginTop:"8px"}}>
-            {salaryByDept.sort((a,b) => b.avg-a.avg).map((d,i) => (
-              <div key={i} className="salary-row">
-                <span className="salary-label">{d.dept}</span>
-                <div className="salary-bar-wrap">
-                  <div className="salary-bar"
-                    style={{width:`${(d.avg/maxSalary)*100}%`, background: d.fill}}/>
-                </div>
-                <span className="salary-amount">${(d.avg/1000).toFixed(0)}k</span>
-              </div>
-            ))}
+      {/* Avg Salary by Department */}
+      <div className="chart-card" style={{marginBottom:"24px"}}>
+        <div className="chart-title">Average Salary by Department</div>
+        <div className="chart-sub">Compared across all teams</div>
+        {salaryByDept.sort((a,b) => b.avg-a.avg).map((d,i) => (
+          <div key={i} className="salary-row">
+            <span className="salary-label">{d.dept}</span>
+            <div className="salary-bar-wrap">
+              <div className="salary-bar" style={{width:`${(d.avg/maxSalary)*100}%`,background:d.fill}}/>
+            </div>
+            <span className="salary-amount">${(d.avg/1000).toFixed(0)}k</span>
           </div>
-        </div>
-
-        {/* Salary Distribution — Line/Bar */}
-        <div className="chart-card">
-          <div className="chart-title">Salary Distribution</div>
-          <div className="chart-sub">How salaries are spread across ranges</div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={bins} barSize={42}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F0EEE9" vertical={false}/>
-              <XAxis dataKey="range" tick={{fontSize:11,fill:"#aaa"}} axisLine={false} tickLine={false}/>
-              <YAxis tick={{fontSize:12,fill:"#aaa"}} axisLine={false} tickLine={false} allowDecimals={false}/>
-              <Tooltip content={<CustomTooltip suffix=" employees"/>}/>
-              <Bar dataKey="count" fill="#5B8BDF" radius={[6,6,0,0]}/>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        ))}
       </div>
 
-      {/* ROW 3 — Top earners quick list */}
-      <div className="chart-card" style={{marginBottom:"24px"}}>
-        <div className="chart-title">Top 5 Earners</div>
-        <div className="chart-sub">Highest paid employees across all departments</div>
-        <table style={{marginTop:"8px"}}>
-          <thead>
-            <tr>
-              <th>Employee</th><th>Department</th><th>Role</th><th>Salary</th><th>Status</th>
-            </tr>
-          </thead>
+      {/* Top 5 Earners */}
+      <div className="table-card">
+        <div className="table-header-row">
+          <span className="table-title">Top 5 Earners</span>
+          <span className="table-count">Highest paid</span>
+        </div>
+        <table>
+          <thead><tr>
+            <th>Employee</th><th>Department</th><th>Role</th><th>Salary</th><th>Status</th>
+          </tr></thead>
           <tbody>
             {[...employees].sort((a,b) => Number(b.salary)-Number(a.salary)).slice(0,5).map((emp,i) => {
               const [bg,fg] = avatarColors[i % avatarColors.length];
@@ -388,10 +333,7 @@ function AnalyticsPage({ employees, stats }) {
                   <td>
                     <div className="emp-info">
                       <div className="emp-avatar" style={{background:bg,color:fg}}>{getInitials(emp.name)}</div>
-                      <div>
-                        <div className="emp-name">{emp.name}</div>
-                        <div className="emp-email">{emp.email}</div>
-                      </div>
+                      <div><div className="emp-name">{emp.name}</div><div className="emp-email">{emp.email}</div></div>
                     </div>
                   </td>
                   <td><span className={`dept-badge dept-${emp.department}`}>{emp.department}</span></td>
@@ -413,10 +355,12 @@ function AnalyticsPage({ employees, stats }) {
   );
 }
 
-// ─────────────────────────────────────────────
+// ══════════════════════════════════════════════
 // MAIN APP
-// ─────────────────────────────────────────────
+// ══════════════════════════════════════════════
 export default function App() {
+
+  // ── EXISTING state ──────────────────────────
   const [employees, setEmployees]   = useState([]);
   const [stats, setStats]           = useState({});
   const [loading, setLoading]       = useState(true);
@@ -426,15 +370,41 @@ export default function App() {
   const [showModal, setShowModal]   = useState(false);
   const [editEmp, setEditEmp]       = useState(null);
   const [form, setForm]             = useState(empty);
-  const [activeNav, setActiveNav]   = useState("dashboard");  // ← Start on dashboard!
+  const [activeNav, setActiveNav]   = useState("dashboard");
   const [toast, setToast]           = useState(null);
   const [saving, setSaving]         = useState(false);
-  const [token, setToken]   = useState(localStorage.getItem("jwt_token"));
-  const [user, setUser]     = useState({
-    name:  localStorage.getItem("user_name")  || "",
-    email: localStorage.getItem("user_email") || ""
-});
 
+  // ── JWT: Auth state ─────────────────────────
+  const [token, setToken] = useState(localStorage.getItem("jwt_token"));
+  const [user, setUser]   = useState({
+    name:  localStorage.getItem("user_name")  || "",
+    email: localStorage.getItem("user_email") || "",
+  });
+
+  // ──────────────────────────────────────────
+  // JWT: If no token → show Login page
+  // This runs BEFORE anything else renders!
+  // ──────────────────────────────────────────
+  if (!token) {
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // ── JWT: Login success handler ──────────────
+  function handleLoginSuccess(newToken, userData) {
+    setToken(newToken);
+    setUser(userData);
+  }
+
+  // ── JWT: Logout handler ─────────────────────
+  function handleLogout() {
+    localStorage.removeItem("jwt_token");
+    localStorage.removeItem("user_name");
+    localStorage.removeItem("user_email");
+    setToken(null);
+    setUser({ name:"", email:"" });
+  }
+
+  // ── Load data on startup ────────────────────
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
@@ -443,8 +413,12 @@ export default function App() {
       const [empData, statsData] = await Promise.all([api.getAll(), api.getStats()]);
       setEmployees(empData.employees || []);
       setStats(statsData);
-    } catch { setApiError(true); showToast("Cannot reach FastAPI"); }
-    finally  { setLoading(false); }
+    } catch {
+      setApiError(true);
+      showToast("⚠️ Cannot reach FastAPI");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 3500); }
@@ -457,19 +431,19 @@ export default function App() {
     return matchDept && matchSearch;
   });
 
-  function openAdd()     { setForm(empty);  setEditEmp(null);    setShowModal(true); }
-  function openEdit(emp) { setForm({...emp}); setEditEmp(emp.id); setShowModal(true); }
+  function openAdd()     { setForm(empty);    setEditEmp(null);    setShowModal(true); }
+  function openEdit(emp) { setForm({...emp}); setEditEmp(emp.id);  setShowModal(true); }
   function closeModal()  { setShowModal(false); setForm(empty); setEditEmp(null); }
 
   async function saveEmployee() {
-    if (!form.name || !form.role || !form.email) { showToast("Fill Name, Role and Email"); return; }
+    if (!form.name || !form.role || !form.email) { showToast("⚠️ Fill Name, Role and Email"); return; }
     try {
       setSaving(true);
       const payload = {...form, salary: Number(form.salary) || 0};
-      if (editEmp) { await api.update(editEmp, payload); showToast("Employee updated!"); }
-      else         { await api.create(payload);           showToast("Employee added!"); }
+      if (editEmp) { await api.update(editEmp, payload); showToast("✅ Employee updated!"); }
+      else         { await api.create(payload);           showToast("✅ Employee added!"); }
       closeModal(); loadData();
-    } catch { showToast("Error saving"); }
+    } catch { showToast("❌ Error saving"); }
     finally  { setSaving(false); }
   }
 
@@ -478,34 +452,13 @@ export default function App() {
     try { await api.delete(id); showToast(`🗑️ ${name} removed`); loadData(); }
     catch { showToast("❌ Error deleting"); }
   }
-  function handleLoginSuccess(newToken, userData) {
-    setToken(newToken);      // Store token in state
-    setUser(userData);       // Store user info in state
-  }
 
-  function handleLogout() {
-    // Clear everything from localStorage
-    localStorage.removeItem("jwt_token");
-    localStorage.removeItem("user_name");
-    localStorage.removeItem("user_email");
-    setToken(null);
-    setUser({ name: "", email: "" });
-  }
-  const navItems = [
-    { id:"dashboard", label:"Dashboard", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> },
-    { id:"employees", label:"Employees", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
-    { id:"payroll",   label:"Payroll",   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
-    { id:"reports",   label:"Reports",   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
-  ];
-	if (!token) {
-	  return <LoginPage onLoginSuccess={handleLoginSuccess} />;
-	}
   return (
     <>
       <style>{styles}</style>
-      <div className="app">
+      <div style={{minHeight:"100vh",background:"#F7F6F2"}}>
 
-        {/* SIDEBAR */}
+        {/* ── SIDEBAR ── */}
         <aside className="sidebar">
           <div className="sidebar-logo">
             <h1>Work<span>Flow</span></h1>
@@ -513,7 +466,12 @@ export default function App() {
           </div>
           <nav className="sidebar-nav">
             <div className="nav-label">Main</div>
-            {navItems.map(n => (
+            {[
+              { id:"dashboard", label:"Dashboard", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> },
+              { id:"employees", label:"Employees", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
+              { id:"payroll",   label:"Payroll",   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
+              { id:"reports",   label:"Reports",   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
+            ].map(n => (
               <div key={n.id} className={`nav-item ${activeNav===n.id?"active":""}`} onClick={() => setActiveNav(n.id)}>
                 {n.icon}<span>{n.label}</span>
               </div>
@@ -524,15 +482,23 @@ export default function App() {
               <span>Settings</span>
             </div>
           </nav>
+
+          {/* JWT: Shows logged-in user + logout button */}
           <div className="sidebar-footer">
             <div className="user-card">
-              <div className="user-avatar">YO</div>
-              <div className="user-name">{user.name || "Admin"}</div><div className="user-role">{user.email || "admin@company.com"}</div>
+              <div className="user-avatar">{getInitials(user.name || "Admin")}</div>
+              <div>
+                <div className="user-name">{user.name  || "Admin"}</div>
+                <div className="user-role">{user.email || "admin@company.com"}</div>
+              </div>
             </div>
+            <button className="btn-logout" onClick={handleLogout}>
+              Sign Out
+            </button>
           </div>
         </aside>
 
-        {/* MAIN CONTENT */}
+        {/* ── MAIN CONTENT ── */}
         <main className="main">
           <div className="topbar">
             <div className="topbar-left">
@@ -541,7 +507,7 @@ export default function App() {
                 {stats.total_employees||0} employees · {stats.total_departments||0} departments
                 {apiError
                   ? <span className="api-badge error"><span className="api-dot error"></span>API Disconnected</span>
-                  : <span className="api-badge"><span className="api-dot"></span>FastAPI + PostgreSQL</span>
+                  : <span className="api-badge"><span className="api-dot"></span>FastAPI + PostgreSQL ✅</span>
                 }
               </p>
             </div>
@@ -559,12 +525,12 @@ export default function App() {
             </div>
           </div>
 
-          {/* STAT CARDS — always visible */}
+          {/* STAT CARDS */}
           <div className="stats-grid">
             {[
               { label:"Total Employees", value:stats.total_employees||0,  sub:"All departments", cls:"gold"  },
               { label:"Active Staff",    value:stats.active_employees||0, sub:`${(stats.total_employees||0)-(stats.active_employees||0)} away`, cls:"green" },
-              { label:"Avg. Salary",     value:stats.average_salary ? `$${(stats.average_salary/1000).toFixed(0)}k` : "-", sub:"Across all roles", cls:"blue" },
+              { label:"Avg. Salary",     value:stats.average_salary?`$${(stats.average_salary/1000).toFixed(0)}k`:"-", sub:"Across all roles", cls:"blue" },
               { label:"Departments",     value:stats.total_departments||0, sub:"Active teams", cls:"rose" },
             ].map((s,i) => (
               <div key={i} className={`stat-card ${s.cls}`}>
@@ -579,13 +545,8 @@ export default function App() {
           {loading ? (
             <div className="loading"><div className="loading-spinner"></div>Loading from FastAPI + PostgreSQL...</div>
           ) : activeNav === "dashboard" ? (
-
-            // ── ANALYTICS PAGE ─────────────────
             <AnalyticsPage employees={employees} stats={stats}/>
-
           ) : activeNav === "employees" ? (
-
-            // ── EMPLOYEES TABLE ─────────────────
             <>
               <div className="filter-bar">
                 {departments.map(d => (
@@ -643,23 +604,20 @@ export default function App() {
               </div>
             </>
           ) : (
-            // ── OTHER PAGES (coming soon) ───────
             <div className="empty-state" style={{padding:"80px 20px"}}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="48" height="48" style={{opacity:.2,margin:"0 auto 16px",display:"block"}}><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
-              <p style={{fontSize:"16px",color:"#bbb"}}>"{activeNav}" page coming soon!</p>
-              <p style={{fontSize:"13px",color:"#ddd",marginTop:"8px"}}>We're building this together 🚀</p>
+              <p style={{fontSize:"16px",color:"#bbb"}}>"{activeNav}" coming soon 🚀</p>
             </div>
           )}
         </main>
 
-        {/* ADD / EDIT MODAL */}
+        {/* MODAL */}
         {showModal && (
           <div className="modal-overlay" onClick={e => e.target===e.currentTarget && closeModal()}>
             <div className="modal">
               <div className="modal-head">
                 <div>
                   <h3>{editEmp ? "Edit Employee" : "Add New Employee"}</h3>
-                  <p>{editEmp ? `→ PUT /api/employees/${editEmp}` : "→ POST /api/employees"}</p>
+                  <p>{editEmp ? `PUT /api/employees/${editEmp}` : "POST /api/employees"}</p>
                 </div>
                 <button className="btn-close" onClick={closeModal}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
