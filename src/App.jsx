@@ -1,3 +1,4 @@
+import LoginPage from "./LoginPage";
 import { useState, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -5,20 +6,43 @@ import {
 } from "recharts";
 
 // ──────────────────────────────────────────────
-// 🔌 YOUR LIVE FASTAPI BACKEND
+//YOUR LIVE FASTAPI BACKEND
 // ──────────────────────────────────────────────
 const API_BASE = "https://employee-api-f3hl.onrender.com";
 
+const getToken = () => localStorage.getItem("jwt_token");
+
 const api = {
-  getAll:   ()         => fetch(`${API_BASE}/api/employees`).then(r => r.json()),
-  getStats: ()         => fetch(`${API_BASE}/api/stats`).then(r => r.json()),
-  create:   (data)     => fetch(`${API_BASE}/api/employees`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data)
+  getAll: () => fetch(`${API_BASE}/api/employees`, {
+    headers: { "Authorization": `Bearer ${getToken()}` }     // ← ADD header
   }).then(r => r.json()),
-  update:   (id, data) => fetch(`${API_BASE}/api/employees/${id}`, {
-    method: "PUT",  headers: { "Content-Type": "application/json" }, body: JSON.stringify(data)
+
+  getStats: () => fetch(`${API_BASE}/api/stats`, {
+    headers: { "Authorization": `Bearer ${getToken()}` }     // ← ADD header
   }).then(r => r.json()),
-  delete:   (id)       => fetch(`${API_BASE}/api/employees/${id}`, { method: "DELETE" }).then(r => r.json()),
+
+  create: (data) => fetch(`${API_BASE}/api/employees`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${getToken()}`                // ← ADD header
+    },
+    body: JSON.stringify(data)
+  }).then(r => r.json()),
+
+  update: (id, data) => fetch(`${API_BASE}/api/employees/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${getToken()}`                // ← ADD header
+    },
+    body: JSON.stringify(data)
+  }).then(r => r.json()),
+
+  delete: (id) => fetch(`${API_BASE}/api/employees/${id}`, {
+    method: "DELETE",
+    headers: { "Authorization": `Bearer ${getToken()}` }     // ← ADD header
+  }).then(r => r.json()),
 };
 
 const DEPT_COLORS = {
@@ -405,6 +429,11 @@ export default function App() {
   const [activeNav, setActiveNav]   = useState("dashboard");  // ← Start on dashboard!
   const [toast, setToast]           = useState(null);
   const [saving, setSaving]         = useState(false);
+  const [token, setToken]   = useState(localStorage.getItem("jwt_token"));
+  const [user, setUser]     = useState({
+    name:  localStorage.getItem("user_name")  || "",
+    email: localStorage.getItem("user_email") || ""
+});
 
   useEffect(() => { loadData(); }, []);
 
@@ -414,7 +443,7 @@ export default function App() {
       const [empData, statsData] = await Promise.all([api.getAll(), api.getStats()]);
       setEmployees(empData.employees || []);
       setStats(statsData);
-    } catch { setApiError(true); showToast("⚠️ Cannot reach FastAPI"); }
+    } catch { setApiError(true); showToast("Cannot reach FastAPI"); }
     finally  { setLoading(false); }
   }
 
@@ -433,14 +462,14 @@ export default function App() {
   function closeModal()  { setShowModal(false); setForm(empty); setEditEmp(null); }
 
   async function saveEmployee() {
-    if (!form.name || !form.role || !form.email) { showToast("⚠️ Fill Name, Role and Email"); return; }
+    if (!form.name || !form.role || !form.email) { showToast("Fill Name, Role and Email"); return; }
     try {
       setSaving(true);
       const payload = {...form, salary: Number(form.salary) || 0};
-      if (editEmp) { await api.update(editEmp, payload); showToast("✅ Employee updated!"); }
-      else         { await api.create(payload);           showToast("✅ Employee added!"); }
+      if (editEmp) { await api.update(editEmp, payload); showToast("Employee updated!"); }
+      else         { await api.create(payload);           showToast("Employee added!"); }
       closeModal(); loadData();
-    } catch { showToast("❌ Error saving"); }
+    } catch { showToast("Error saving"); }
     finally  { setSaving(false); }
   }
 
@@ -449,14 +478,28 @@ export default function App() {
     try { await api.delete(id); showToast(`🗑️ ${name} removed`); loadData(); }
     catch { showToast("❌ Error deleting"); }
   }
+  function handleLoginSuccess(newToken, userData) {
+    setToken(newToken);      // Store token in state
+    setUser(userData);       // Store user info in state
+  }
 
+  function handleLogout() {
+    // Clear everything from localStorage
+    localStorage.removeItem("jwt_token");
+    localStorage.removeItem("user_name");
+    localStorage.removeItem("user_email");
+    setToken(null);
+    setUser({ name: "", email: "" });
+  }
   const navItems = [
     { id:"dashboard", label:"Dashboard", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> },
     { id:"employees", label:"Employees", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
     { id:"payroll",   label:"Payroll",   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
     { id:"reports",   label:"Reports",   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
   ];
-
+	if (!token) {
+	  return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+	}
   return (
     <>
       <style>{styles}</style>
@@ -484,7 +527,7 @@ export default function App() {
           <div className="sidebar-footer">
             <div className="user-card">
               <div className="user-avatar">YO</div>
-              <div><div className="user-name">You</div><div className="user-role">MuleSoft Dev</div></div>
+              <div className="user-name">{user.name || "Admin"}</div><div className="user-role">{user.email || "admin@company.com"}</div>
             </div>
           </div>
         </aside>
@@ -498,7 +541,7 @@ export default function App() {
                 {stats.total_employees||0} employees · {stats.total_departments||0} departments
                 {apiError
                   ? <span className="api-badge error"><span className="api-dot error"></span>API Disconnected</span>
-                  : <span className="api-badge"><span className="api-dot"></span>FastAPI + PostgreSQL ✅</span>
+                  : <span className="api-badge"><span className="api-dot"></span>FastAPI + PostgreSQL</span>
                 }
               </p>
             </div>
