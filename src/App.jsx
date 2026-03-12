@@ -4,20 +4,19 @@ import {
   PieChart, Pie, Cell,
 } from "recharts";
 import LoginPage from "./LoginPage";   // ← JWT: Import Login
-
+import AIChatPage from "./AIChatPage"
 // ──────────────────────────────────────────────
-// 🔌 FASTAPI BACKEND URL
+// FASTAPI BACKEND URL
 // ──────────────────────────────────────────────
 const API_BASE = "https://employee-api-f3hl.onrender.com";
 
 // ──────────────────────────────────────────────
-// 🔑 JWT: Helper to always get latest token
+// JWT: Helper to always get latest token
 // ──────────────────────────────────────────────
 const getToken = () => localStorage.getItem("jwt_token");
 
 // ──────────────────────────────────────────────
-// 🔌 API SERVICE — All calls include JWT token
-// MuleSoft analogy: HTTP Request connector
+// API SERVICE — All calls include JWT token
 // with Authorization header on every call
 // ──────────────────────────────────────────────
 const api = {
@@ -415,7 +414,7 @@ export default function App() {
       setStats(statsData);
     } catch {
       setApiError(true);
-      showToast("⚠️ Cannot reach FastAPI");
+      showToast("Cannot reach FastAPI");
     } finally {
       setLoading(false);
     }
@@ -436,14 +435,14 @@ export default function App() {
   function closeModal()  { setShowModal(false); setForm(empty); setEditEmp(null); }
 
   async function saveEmployee() {
-    if (!form.name || !form.role || !form.email) { showToast("⚠️ Fill Name, Role and Email"); return; }
+    if (!form.name || !form.role || !form.email) { showToast("Fill Name, Role and Email"); return; }
     try {
       setSaving(true);
       const payload = {...form, salary: Number(form.salary) || 0};
-      if (editEmp) { await api.update(editEmp, payload); showToast("✅ Employee updated!"); }
-      else         { await api.create(payload);           showToast("✅ Employee added!"); }
+      if (editEmp) { await api.update(editEmp, payload); showToast("Employee updated!"); }
+      else         { await api.create(payload);           showToast("Employee added!"); }
       closeModal(); loadData();
-    } catch { showToast("❌ Error saving"); }
+    } catch { showToast("Error saving"); }
     finally  { setSaving(false); }
   }
 
@@ -469,6 +468,7 @@ export default function App() {
             {[
               { id:"dashboard", label:"Dashboard", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg> },
               { id:"employees", label:"Employees", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
+			  { id:"ai-assistant", label:"AI Assistant", icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg> },
               { id:"payroll",   label:"Payroll",   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> },
               { id:"reports",   label:"Reports",   icon:<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
             ].map(n => (
@@ -507,7 +507,7 @@ export default function App() {
                 {stats.total_employees||0} employees · {stats.total_departments||0} departments
                 {apiError
                   ? <span className="api-badge error"><span className="api-dot error"></span>API Disconnected</span>
-                  : <span className="api-badge"><span className="api-dot"></span>FastAPI + PostgreSQL ✅</span>
+                  : <span className="api-badge"><span className="api-dot"></span>FastAPI + PostgreSQL</span>
                 }
               </p>
             </div>
@@ -603,11 +603,13 @@ export default function App() {
                 </table>
               </div>
             </>
-          ) : (
-            <div className="empty-state" style={{padding:"80px 20px"}}>
-              <p style={{fontSize:"16px",color:"#bbb"}}>"{activeNav}" coming soon 🚀</p>
-            </div>
-          )}
+		  ) : activeNav === "ai-assistant" ? (
+		  <AIChatPage user={user} />
+		) : (
+		  <div className="empty-state" style={{padding:"80px 20px"}}>
+			<p style={{fontSize:"16px",color:"#bbb"}}>{activeNav}" coming soon</p>
+		  </div>
+		)}
         </main>
 
         {/* MODAL */}
