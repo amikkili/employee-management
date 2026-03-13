@@ -1,95 +1,143 @@
 import { useState, useEffect } from "react";
 
-// ──────────────────────────────────────────────
-// PayrollPage.jsx — Payroll Management Page
-// NEW FILE → save as src/PayrollPage.jsx
-//
-// Features:
-//   - Summary stat cards (budget, monthly cost, avg salary)
-//   - Full payroll table (annual, monthly, tax, net pay)
-//   - Department breakdown table
-//   - Export to PDF (no library needed — pure JS!)
-//
-// Connects to: GET /api/payroll on FastAPI
-// ──────────────────────────────────────────────
+const API_BASE = "https://employee-api-f3hl.onrender.com";
+const getToken = () => localStorage.getItem("jwt_token");
+const fmt  = (n) => `$${Number(n).toLocaleString("en-US", { minimumFractionDigits:0, maximumFractionDigits:0 })}`;
+const fmtD = (n) => `$${Number(n).toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 })}`;
+const month = new Date().toLocaleString("default", { month:"long", year:"numeric" });
 
-const API_BASE  = "https://employee-api-f3hl.onrender.com";
-const getToken  = () => localStorage.getItem("jwt_token");
-const fmt       = (n) => "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 0 });
-const fmtK      = (n) => "$" + (n / 1000).toFixed(0) + "k";
-
-// ── DEPT COLOR MAP ────────────────────────────
 const DEPT_COLORS = {
-  Engineering:  { bg: "#EEF3FF", text: "#5B8BDF", border: "#C8D8FF" },
-  Integration:  { bg: "#FFF9F0", text: "#C8A96E", border: "#F0E5D0" },
-  Analytics:    { bg: "#EEF9F2", text: "#4CAF82", border: "#C0E8D0" },
-  Design:       { bg: "#FFF0F5", text: "#E07070", border: "#FFD0D8" },
-  Product:      { bg: "#F5EEF8", text: "#9B72CF", border: "#DFC8F0" },
+  Engineering: { bg:"#EEF3FF", text:"#5B8BDF", border:"#C8D9F8" },
+  Integration:  { bg:"#FFF9F0", text:"#C8A96E", border:"#F0E5D0" },
+  Analytics:    { bg:"#EEF9F2", text:"#4CAF82", border:"#C0E8D0" },
+  Design:       { bg:"#FFF0F5", text:"#E07070", border:"#F8D0D8" },
+  Product:      { bg:"#F5EEF8", text:"#9B72CF", border:"#D8C0F0" },
 };
-const getDeptStyle = (dept) =>
-  DEPT_COLORS[dept] || { bg: "#F7F6F2", text: "#888", border: "#E8E6E0" };
+const getDeptStyle = (d) => DEPT_COLORS[d] || { bg:"#F5F5F5", text:"#888", border:"#DDD" };
 
-// ── STATUS BADGE ──────────────────────────────
-const StatusBadge = ({ status }) => {
-  const map = {
-    Active:    { bg: "#EEF9F2", color: "#4CAF82" },
-    "On Leave":{ bg: "#FFF9F0", color: "#C8A96E" },
-    Inactive:  { bg: "#F7F6F2", color: "#aaa"    },
-  };
-  const s = map[status] || map.Inactive;
-  return (
-    <span style={{
-      background: s.bg, color: s.color,
-      padding: "3px 10px", borderRadius: 20,
-      fontSize: 12, fontWeight: 500,
-      display: "inline-flex", alignItems: "center", gap: 5
-    }}>
-      <span style={{ width: 5, height: 5, borderRadius: "50%", background: s.color }} />
-      {status}
-    </span>
-  );
-};
+const AVATAR_COLORS = [
+  { bg:"#EEF3FF", color:"#5B8BDF" }, { bg:"#FFF9F0", color:"#C8A96E" },
+  { bg:"#EEF9F2", color:"#4CAF82" }, { bg:"#FFF0F5", color:"#E07070" },
+  { bg:"#F5EEF8", color:"#9B72CF" }, { bg:"#E8F8F5", color:"#1ABC9C" },
+];
+const getAvatar   = (name) => AVATAR_COLORS[(name?.charCodeAt(0)||0) % AVATAR_COLORS.length];
+const getInitials = (name) => name?.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2) || "?";
 
-// ── STAT CARD ─────────────────────────────────
-const StatCard = ({ label, value, sub, accent }) => (
-  <div style={{
-    background: "#fff", border: "1.5px solid #EDECEA",
-    borderRadius: 16, padding: "20px 24px",
-    borderTop: `4px solid ${accent}`,
-  }}>
-    <p style={{ fontSize: 11.5, color: "#aaa", textTransform: "uppercase",
-      letterSpacing: ".6px", margin: "0 0 8px", fontWeight: 500 }}>{label}</p>
-    <p style={{ fontSize: 26, fontWeight: 700, color: "#1C1C1E",
-      fontFamily: "'Playfair Display', serif", margin: "0 0 4px" }}>{value}</p>
-    {sub && <p style={{ fontSize: 12.5, color: "#aaa", margin: 0 }}>{sub}</p>}
-  </div>
-);
+const S = `
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+  .payroll-page { font-family:'DM Sans',sans-serif; }
+  .payroll-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:28px; flex-wrap:wrap; gap:16px; }
+  .payroll-header h2 { font-family:'Playfair Display',serif; font-size:28px; font-weight:700; color:#1C1C1E; letter-spacing:-0.5px; margin:0 0 4px; }
+  .payroll-header p { font-size:13.5px; color:#888; margin:0; }
+  .header-actions { display:flex; gap:10px; align-items:center; }
+  .btn-export { display:flex; align-items:center; gap:8px; padding:10px 20px; background:#1C1C1E; color:#fff; border:none; border-radius:10px; font-size:13px; font-family:'DM Sans',sans-serif; font-weight:500; cursor:pointer; transition:all .18s; }
+  .btn-export:hover { background:#333; transform:translateY(-1px); }
+  .btn-export svg { width:15px; height:15px; }
+  .btn-month { padding:10px 16px; border:1.5px solid #E8E6E0; background:#fff; border-radius:10px; font-size:13px; font-family:'DM Sans',sans-serif; color:#666; cursor:default; display:flex; align-items:center; gap:6px; }
+  .btn-month svg { width:14px; height:14px; }
+  .summary-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:28px; }
+  .summary-card { background:#fff; border:1.5px solid #EDECEA; border-radius:14px; padding:18px 20px; }
+  .summary-card .card-label { font-size:11px; font-weight:600; color:#aaa; text-transform:uppercase; letter-spacing:.6px; margin-bottom:8px; }
+  .summary-card .card-value { font-size:24px; font-weight:600; color:#1C1C1E; letter-spacing:-0.5px; line-height:1; margin-bottom:4px; }
+  .summary-card .card-sub   { font-size:12px; color:#aaa; }
+  .summary-card.highlight   { background:#1C1C1E; border-color:#1C1C1E; }
+  .summary-card.highlight .card-label { color:#888; }
+  .summary-card.highlight .card-value { color:#C8A96E; }
+  .summary-card.highlight .card-sub   { color:#666; }
+  .section-title { font-size:14px; font-weight:600; color:#1C1C1E; margin:0 0 14px; display:flex; align-items:center; gap:8px; }
+  .section-title span { font-weight:400; color:#aaa; font-size:13px; }
+  .dept-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:12px; margin-bottom:28px; }
+  .dept-card  { border-radius:12px; padding:14px 16px; border:1.5px solid; }
+  .dept-card .dept-name  { font-size:12px; font-weight:600; margin-bottom:8px; }
+  .dept-card .dept-value { font-size:18px; font-weight:600; color:#1C1C1E; margin-bottom:2px; }
+  .dept-card .dept-sub   { font-size:11.5px; color:#999; }
+  .payroll-table-wrap { background:#fff; border:1.5px solid #EDECEA; border-radius:14px; overflow:hidden; margin-bottom:20px; }
+  .table-header-bar { display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1.5px solid #EDECEA; flex-wrap:wrap; gap:10px; }
+  .table-header-bar h3 { font-size:14px; font-weight:600; color:#1C1C1E; margin:0 0 2px; }
+  .table-header-bar p  { font-size:12.5px; color:#aaa; margin:0; }
+  .payroll-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .payroll-table th { padding:11px 16px; background:#F7F6F2; font-size:11px; font-weight:600; color:#999; text-transform:uppercase; letter-spacing:.5px; text-align:left; border-bottom:1.5px solid #EDECEA; }
+  .payroll-table th.right { text-align:right; }
+  .payroll-table td { padding:13px 16px; border-bottom:1px solid #F5F3EF; color:#444; vertical-align:middle; }
+  .payroll-table td.right { text-align:right; font-variant-numeric:tabular-nums; }
+  .payroll-table tr:last-child td { border-bottom:none; }
+  .payroll-table tr:hover td { background:#FAFAF8; }
+  .emp-cell { display:flex; align-items:center; gap:10px; }
+  .emp-avatar { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:600; flex-shrink:0; }
+  .emp-name { font-size:13px; font-weight:500; color:#1C1C1E; }
+  .emp-role { font-size:11.5px; color:#aaa; }
+  .dept-badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11.5px; font-weight:500; border:1px solid; }
+  .status-dot { display:inline-flex; align-items:center; gap:5px; font-size:12px; color:#4CAF82; }
+  .status-dot .dot { width:6px; height:6px; border-radius:50%; background:#4CAF82; }
+  .status-dot.inactive { color:#aaa; }
+  .status-dot.inactive .dot { background:#ccc; }
+  .net-pay { font-weight:600; color:#1C1C1E; }
+  .tax-amt  { color:#E07070; font-size:12.5px; }
+  .total-row td { background:#F7F6F2 !important; font-weight:600; color:#1C1C1E; border-top:2px solid #EDECEA; }
+  .btn-view-slip { padding:5px 12px; border:1.5px solid #E8E6E0; background:#fff; border-radius:8px; font-size:12px; font-family:'DM Sans',sans-serif; color:#555; cursor:pointer; white-space:nowrap; transition:all .15s; }
+  .btn-view-slip:hover { border-color:#C8A96E; color:#C8A96E; background:#FFF9F0; }
+  .payroll-loading { display:flex; align-items:center; justify-content:center; padding:80px; color:#aaa; gap:10px; font-size:14px; }
+
+  /* SALARY SLIP MODAL */
+  .slip-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:1000; padding:20px; }
+  .slip-modal { background:#fff; border-radius:16px; width:100%; max-width:500px; max-height:90vh; overflow-y:auto; animation:slipUp .2s ease; }
+  @keyframes slipUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+  .slip-modal::-webkit-scrollbar { width:4px; }
+  .slip-modal::-webkit-scrollbar-thumb { background:#E8E6E0; border-radius:2px; }
+  .slip-header { background:#1C1C1E; padding:28px; border-radius:16px 16px 0 0; }
+  .slip-header h3 { font-family:'Playfair Display',serif; font-size:22px; color:#C8A96E; margin:0 0 4px; }
+  .slip-header p  { font-size:12.5px; color:#888; margin:0; }
+  .slip-body { padding:24px; }
+  .slip-emp-row { display:flex; align-items:center; gap:14px; padding:16px; background:#F7F6F2; border-radius:12px; margin-bottom:20px; }
+  .slip-emp-avatar { width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:600; flex-shrink:0; }
+  .slip-emp-name { font-size:15px; font-weight:600; color:#1C1C1E; margin-bottom:3px; }
+  .slip-emp-meta { font-size:12.5px; color:#888; }
+  .slip-section-label { font-size:11px; font-weight:600; color:#aaa; text-transform:uppercase; letter-spacing:.5px; margin:16px 0 8px; }
+  .slip-section-label:first-of-type { margin-top:0; }
+  .slip-row { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid #F5F3EF; font-size:13.5px; }
+  .slip-row:last-child { border-bottom:none; }
+  .slip-row .label { color:#888; }
+  .slip-row .value { font-weight:500; color:#1C1C1E; }
+  .slip-row.tax-row .value { color:#E07070; }
+  .slip-total { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; background:#F7F6F2; border-radius:10px; margin-top:16px; }
+  .slip-total .label { font-size:14px; font-weight:600; color:#1C1C1E; }
+  .slip-total .value { font-size:20px; font-weight:700; color:#1C1C1E; }
+  .slip-footer { display:flex; gap:10px; padding:0 24px 24px; }
+  .btn-slip-close { padding:11px 18px; border:1.5px solid #E8E6E0; background:#fff; border-radius:10px; font-size:13px; font-family:'DM Sans',sans-serif; color:#666; cursor:pointer; transition:all .15s; }
+  .btn-slip-close:hover { border-color:#999; color:#333; }
+  .btn-slip-download { flex:1; padding:11px; background:#1C1C1E; color:#fff; border:none; border-radius:10px; font-size:13px; font-family:'DM Sans',sans-serif; font-weight:500; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition:all .15s; }
+  .btn-slip-download:hover { background:#333; }
+  .slip-note { font-size:11.5px; color:#ccc; text-align:center; padding:0 24px 16px; }
+
+  @media print {
+    .btn-export, .btn-month, .header-actions, .btn-view-slip { display:none !important; }
+    .payroll-table th { background:#f0f0f0 !important; -webkit-print-color-adjust:exact; }
+    .summary-card.highlight { background:#1C1C1E !important; -webkit-print-color-adjust:exact; }
+    .dept-card { -webkit-print-color-adjust:exact; }
+    .slip-overlay { position:fixed !important; background:white !important; padding:0 !important; align-items:flex-start !important; }
+    .slip-modal { max-height:none; border-radius:0; width:100%; }
+    .slip-footer, .slip-note, .btn-slip-close, .btn-slip-download { display:none !important; }
+    .payroll-header, .summary-cards, .dept-cards, .payroll-table-wrap, .section-title { display:none !important; }
+    .slip-header { border-radius:0; -webkit-print-color-adjust:exact; }
+  }
+`;
 
 export default function PayrollPage() {
-  const [payroll,     setPayroll]     = useState([]);
-  const [deptSummary, setDeptSummary] = useState([]);
-  const [totals,      setTotals]      = useState({});
-  const [loading,     setLoading]     = useState(true);
-  const [error,       setError]       = useState(null);
-  const [search,      setSearch]      = useState("");
-  const [filterDept,  setFilterDept]  = useState("All");
-  const [activeTab,   setActiveTab]   = useState("employees"); // "employees" | "departments"
-  const [sortField,   setSortField]   = useState("name");
-  const [sortDir,     setSortDir]     = useState("asc");
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(null);
+  const [filter,  setFilter]  = useState("All");
+  const [slip,    setSlip]    = useState(null);   // selected employee for salary slip
 
-  // ── FETCH PAYROLL DATA ───────────────────────
   useEffect(() => {
     async function load() {
       try {
-        setLoading(true);
         const res  = await fetch(`${API_BASE}/api/payroll`, {
           headers: { Authorization: `Bearer ${getToken()}` }
         });
-        if (!res.ok) throw new Error("Failed to load payroll data");
-        const data = await res.json();
-        setPayroll(data.payroll     || []);
-        setDeptSummary(data.dept_summary || []);
-        setTotals(data.totals       || {});
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.detail || "Failed to load payroll");
+        setData(json);
       } catch (e) {
         setError(e.message);
       } finally {
@@ -99,403 +147,228 @@ export default function PayrollPage() {
     load();
   }, []);
 
-  // ── DEPARTMENTS LIST FOR FILTER ───────────────
-  const departments = ["All", ...new Set(payroll.map(p => p.department))];
-
-  // ── FILTER + SEARCH + SORT ───────────────────
-  const filtered = payroll
-    .filter(p =>
-      (filterDept === "All" || p.department === filterDept) &&
-      (p.name.toLowerCase().includes(search.toLowerCase()) ||
-       p.role.toLowerCase().includes(search.toLowerCase()))
-    )
-    .sort((a, b) => {
-      const mult = sortDir === "asc" ? 1 : -1;
-      if (["annual","monthly","tax","net_pay"].includes(sortField))
-        return (a[sortField] - b[sortField]) * mult;
-      return a[sortField].localeCompare(b[sortField]) * mult;
-    });
-
-  function toggleSort(field) {
-    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortField(field); setSortDir("asc"); }
-  }
-
-  const SortIcon = ({ field }) => {
-    if (sortField !== field) return <span style={{ color: "#ddd", marginLeft: 4 }}>↕</span>;
-    return <span style={{ color: "#C8A96E", marginLeft: 4 }}>{sortDir === "asc" ? "↑" : "↓"}</span>;
-  };
-
-  // ── EXPORT TO CSV ────────────────────────────
-  // Pure JavaScript — no library needed!
-  // Creates a downloadable CSV file from the payroll data
-  function exportCSV() {
-    const headers = ["Name","Role","Department","Status","Annual Salary","Monthly","Tax Est.","Net Pay"];
-    const rows    = filtered.map(p => [
-      p.name, p.role, p.department, p.status,
-      p.annual, p.monthly, p.tax, p.net_pay
-    ]);
-    const csv = [headers, ...rows]
-      .map(r => r.map(v => `"${v}"`).join(","))
-      .join("\n");
-
-    // Create a hidden download link and click it
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = `payroll-${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  // ── LOADING STATE ────────────────────────────
   if (loading) return (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
-      height: 300, flexDirection:"column", gap: 16 }}>
-      <div style={{ width: 36, height: 36, borderRadius: "50%",
-        border: "3px solid #EDECEA", borderTopColor: "#C8A96E",
-        animation: "spin 0.8s linear infinite" }} />
-      <p style={{ color: "#aaa", fontSize: 14 }}>Loading payroll data...</p>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-    </div>
+    <><style>{S}</style>
+      <div className="payroll-loading">
+        <div style={{width:20,height:20,border:"2px solid #E8E6E0",borderTopColor:"#C8A96E",borderRadius:"50%",animation:"spin .7s linear infinite"}}></div>
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+        Loading payroll data...
+      </div>
+    </>
   );
 
   if (error) return (
-    <div style={{ background: "#FFF0F0", border: "1.5px solid #FFD0D0",
-      borderRadius: 12, padding: 24, color: "#E07070" }}>
-      ⚠️ {error}
-    </div>
+    <><style>{S}</style>
+      <div className="payroll-loading" style={{color:"#E07070"}}>⚠️ {error}</div>
+    </>
   );
 
+  const { employees, dept_totals, summary } = data;
+  const departments = ["All", ...new Set(employees.map(e => e.department))];
+  const filtered    = filter === "All" ? employees : employees.filter(e => e.department === filter);
+
   return (
-    <div style={{ fontFamily: "'DM Sans', sans-serif" }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
-        .pay-table th { cursor: pointer; user-select: none; }
-        .pay-table th:hover { color: #C8A96E !important; }
-        .pay-row:hover td { background: #FAFAF8 !important; }
-        .tab-btn { cursor: pointer; transition: all .15s; }
-        .tab-btn:hover { color: #1C1C1E !important; }
-        .chip { cursor: pointer; transition: all .15s; }
-        .chip:hover { border-color: #C8A96E !important; color: #C8A96E !important; }
-      `}</style>
+    <><style>{S}</style>
+    <div className="payroll-page">
 
-      {/* ── PAGE HEADER ── */}
-      <div style={{ display:"flex", alignItems:"flex-start",
-        justifyContent:"space-between", marginBottom: 28 }}>
+      {/* HEADER */}
+      <div className="payroll-header">
         <div>
-          <h2 style={{ fontFamily:"'Playfair Display',serif", fontSize: 28,
-            fontWeight: 700, color: "#1C1C1E", margin: "0 0 6px",
-            letterSpacing: "-0.5px" }}>Payroll Management</h2>
-          <p style={{ fontSize: 13.5, color: "#aaa", margin: 0 }}>
-            Monthly salary breakdown · Tax estimates · Export ready
-          </p>
+          <h2>Payroll</h2>
+          <p>Monthly breakdown for {month} · {summary.headcount} employees</p>
         </div>
-        <button onClick={exportCSV} style={{
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "10px 20px", borderRadius: 12,
-          background: "#1C1C1E", color: "#fff",
-          border: "none", fontSize: 13.5, fontWeight: 500,
-          cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
-          transition: "all .18s",
-        }}
-          onMouseEnter={e => e.currentTarget.style.background = "#333"}
-          onMouseLeave={e => e.currentTarget.style.background = "#1C1C1E"}
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          Export CSV
-        </button>
-      </div>
-
-      {/* ── STAT CARDS ── */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)",
-        gap: 16, marginBottom: 28 }}>
-        <StatCard
-          label="Annual Budget"
-          value={fmtK(totals.annual_budget || 0)}
-          sub="Total company payroll"
-          accent="#C8A96E"
-        />
-        <StatCard
-          label="Monthly Cost"
-          value={fmtK(totals.monthly_cost || 0)}
-          sub="This month's total"
-          accent="#5B8BDF"
-        />
-        <StatCard
-          label="Avg. Salary"
-          value={fmtK(totals.avg_salary || 0)}
-          sub="Across all employees"
-          accent="#4CAF82"
-        />
-        <StatCard
-          label="On Payroll"
-          value={totals.total_employees || 0}
-          sub="Active employees"
-          accent="#9B72CF"
-        />
-      </div>
-
-      {/* ── TABS ── */}
-      <div style={{ display:"flex", gap: 4, marginBottom: 20,
-        borderBottom: "2px solid #EDECEA", paddingBottom: 0 }}>
-        {[
-          { id:"employees",   label:"Employee Payroll" },
-          { id:"departments", label:"Department Summary" },
-        ].map(t => (
-          <button key={t.id}
-            className="tab-btn"
-            onClick={() => setActiveTab(t.id)}
-            style={{
-              padding: "10px 20px", border:"none", background:"none",
-              fontSize: 13.5, fontWeight: activeTab === t.id ? 600 : 400,
-              color: activeTab === t.id ? "#1C1C1E" : "#aaa",
-              borderBottom: activeTab === t.id ? "2px solid #C8A96E" : "2px solid transparent",
-              marginBottom: -2, cursor:"pointer",
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
-            {t.label}
+        <div className="header-actions">
+          <button className="btn-month">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            {month}
           </button>
-        ))}
+          <button className="btn-export" onClick={() => window.print()}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export PDF
+          </button>
+        </div>
       </div>
 
-      {/* ── EMPLOYEE PAYROLL TAB ── */}
-      {activeTab === "employees" && (
-        <>
-          {/* Search + Filter */}
-          <div style={{ display:"flex", gap: 12, marginBottom: 20,
-            alignItems:"center", flexWrap:"wrap" }}>
-            <div style={{ position:"relative", flex: 1, minWidth: 200 }}>
-              <svg style={{ position:"absolute", left:12, top:"50%",
-                transform:"translateY(-50%)", color:"#bbb" }}
-                width="15" height="15" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-              <input
-                placeholder="Search employees..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                style={{ width:"100%", padding:"9px 12px 9px 36px",
-                  border:"1.5px solid #E8E6E0", borderRadius:10,
-                  fontSize:13.5, outline:"none", boxSizing:"border-box",
-                  fontFamily:"'DM Sans',sans-serif" }}
-              />
+      {/* SUMMARY CARDS */}
+      <div className="summary-cards">
+        <div className="summary-card highlight">
+          <div className="card-label">Total Monthly Cost</div>
+          <div className="card-value">{fmt(summary.total_monthly_gross)}</div>
+          <div className="card-sub">{fmt(summary.total_annual)} annually</div>
+        </div>
+        <div className="summary-card">
+          <div className="card-label">Monthly Net Pay</div>
+          <div className="card-value">{fmt(summary.total_monthly_net)}</div>
+          <div className="card-sub">After 20% tax estimate</div>
+        </div>
+        <div className="summary-card">
+          <div className="card-label">Est. Monthly Tax</div>
+          <div className="card-value" style={{color:"#E07070"}}>{fmt(summary.total_monthly_tax)}</div>
+          <div className="card-sub">20% flat rate</div>
+        </div>
+        <div className="summary-card">
+          <div className="card-label">Headcount</div>
+          <div className="card-value">{summary.headcount}</div>
+          <div className="card-sub">Employees on payroll</div>
+        </div>
+      </div>
+
+      {/* DEPT TOTALS */}
+      <p className="section-title">By Department <span>Monthly gross payroll</span></p>
+      <div className="dept-cards">
+        {dept_totals.map((d,i) => {
+          const s = getDeptStyle(d.department);
+          return (
+            <div key={i} className="dept-card" style={{background:s.bg, borderColor:s.border}}>
+              <div className="dept-name" style={{color:s.text}}>{d.department}</div>
+              <div className="dept-value">{fmt(d.monthly_gross)}</div>
+              <div className="dept-sub">{d.headcount} employee{d.headcount!==1?"s":""}</div>
             </div>
-            <div style={{ display:"flex", gap: 8, flexWrap:"wrap" }}>
-              {departments.map(d => (
-                <span key={d} className="chip"
-                  onClick={() => setFilterDept(d)}
-                  style={{
-                    padding:"6px 14px", borderRadius:20, fontSize:12.5,
-                    border: `1.5px solid ${filterDept===d ? "#C8A96E" : "#E8E6E0"}`,
-                    color:  filterDept===d ? "#C8A96E" : "#888",
-                    background: filterDept===d ? "#FFF9F0" : "#fff",
-                    fontWeight: filterDept===d ? 500 : 400,
-                  }}>
-                  {d}
-                </span>
-              ))}
-            </div>
-            <span style={{ fontSize:12.5, color:"#aaa", whiteSpace:"nowrap" }}>
-              {filtered.length} employees
-            </span>
+          );
+        })}
+      </div>
+
+      {/* TABLE */}
+      <div className="payroll-table-wrap">
+        <div className="table-header-bar">
+          <div>
+            <h3>Employee Payroll Breakdown</h3>
+            <p>Monthly salary · 20% estimated tax deduction</p>
           </div>
+          <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+            {departments.map(d => (
+              <button key={d} onClick={() => setFilter(d)}
+                style={{padding:"5px 12px",borderRadius:"20px",border:`1.5px solid ${filter===d?"#1C1C1E":"#E8E6E0"}`,background:filter===d?"#1C1C1E":"#fff",color:filter===d?"#fff":"#666",fontSize:"12px",cursor:"pointer",fontFamily:"'DM Sans',sans-serif"}}>
+                {d}
+              </button>
+            ))}
+          </div>
+        </div>
 
-          {/* Table */}
-          <div style={{ background:"#fff", border:"1.5px solid #EDECEA",
-            borderRadius:16, overflow:"hidden" }}>
-            <table className="pay-table" style={{ width:"100%",
-              borderCollapse:"collapse" }}>
-              <thead>
-                <tr style={{ background:"#F7F6F2" }}>
-                  {[
-                    { label:"Employee",   field:"name"     },
-                    { label:"Department", field:"department"},
-                    { label:"Status",     field:"status"   },
-                    { label:"Annual",     field:"annual"   },
-                    { label:"Monthly",    field:"monthly"  },
-                    { label:"Tax (20%)",  field:"tax"      },
-                    { label:"Net Pay",    field:"net_pay"  },
-                  ].map(col => (
-                    <th key={col.field}
-                      onClick={() => toggleSort(col.field)}
-                      style={{ padding:"13px 16px", textAlign:"left",
-                        fontSize:11.5, fontWeight:600, color:"#888",
-                        textTransform:"uppercase", letterSpacing:".5px",
-                        borderBottom:"1.5px solid #EDECEA", whiteSpace:"nowrap" }}>
-                      {col.label}<SortIcon field={col.field}/>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((p, i) => {
-                  const ds = getDeptStyle(p.department);
-                  return (
-                    <tr key={p.id} className="pay-row">
-                      <td style={{ padding:"14px 16px",
-                        borderBottom:"1.5px solid #F7F6F2" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap: 10 }}>
-                          <div style={{
-                            width:34, height:34, borderRadius:"50%",
-                            background: ds.bg, color: ds.text,
-                            display:"flex", alignItems:"center",
-                            justifyContent:"center", fontSize:12,
-                            fontWeight:600, flexShrink:0,
-                          }}>
-                            {p.name.split(" ").map(n=>n[0]).join("").slice(0,2)}
-                          </div>
-                          <div>
-                            <p style={{ margin:0, fontSize:13.5,
-                              fontWeight:500, color:"#1C1C1E" }}>{p.name}</p>
-                            <p style={{ margin:0, fontSize:12,
-                              color:"#aaa" }}>{p.role}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ padding:"14px 16px",
-                        borderBottom:"1.5px solid #F7F6F2" }}>
-                        <span style={{ background:ds.bg, color:ds.text,
-                          padding:"3px 10px", borderRadius:20, fontSize:12,
-                          fontWeight:500, border:`1px solid ${ds.border}` }}>
-                          {p.department}
-                        </span>
-                      </td>
-                      <td style={{ padding:"14px 16px",
-                        borderBottom:"1.5px solid #F7F6F2" }}>
-                        <StatusBadge status={p.status}/>
-                      </td>
-                      <td style={{ padding:"14px 16px",
-                        borderBottom:"1.5px solid #F7F6F2",
-                        fontSize:13.5, fontWeight:600, color:"#1C1C1E" }}>
-                        {fmt(p.annual)}
-                      </td>
-                      <td style={{ padding:"14px 16px",
-                        borderBottom:"1.5px solid #F7F6F2",
-                        fontSize:13.5, color:"#555" }}>
-                        {fmt(p.monthly)}
-                      </td>
-                      <td style={{ padding:"14px 16px",
-                        borderBottom:"1.5px solid #F7F6F2",
-                        fontSize:13.5, color:"#E07070" }}>
-                        -{fmt(p.tax)}
-                      </td>
-                      <td style={{ padding:"14px 16px",
-                        borderBottom:"1.5px solid #F7F6F2" }}>
-                        <span style={{ fontSize:13.5, fontWeight:600,
-                          color:"#4CAF82" }}>{fmt(p.net_pay)}</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-
-              {/* TOTALS ROW */}
-              <tfoot>
-                <tr style={{ background:"#F7F6F2" }}>
-                  <td colSpan={3} style={{ padding:"13px 16px",
-                    fontSize:13, fontWeight:600, color:"#888" }}>
-                    Totals ({filtered.length} employees)
+        <table className="payroll-table">
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Department</th>
+              <th className="right">Annual</th>
+              <th className="right">Monthly Gross</th>
+              <th className="right">Tax (20%)</th>
+              <th className="right">Monthly Net</th>
+              <th>Status</th>
+              <th>Slip</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((emp,i) => {
+              const av     = getAvatar(emp.name);
+              const ds     = getDeptStyle(emp.department);
+              const active = emp.status?.toLowerCase() === "active";
+              return (
+                <tr key={i}>
+                  <td>
+                    <div className="emp-cell">
+                      <div className="emp-avatar" style={{background:av.bg,color:av.color}}>{getInitials(emp.name)}</div>
+                      <div><div className="emp-name">{emp.name}</div><div className="emp-role">{emp.role}</div></div>
+                    </div>
                   </td>
-                  <td style={{ padding:"13px 16px",
-                    fontSize:13.5, fontWeight:700, color:"#1C1C1E" }}>
-                    {fmt(filtered.reduce((s,p)=>s+p.annual,0))}
-                  </td>
-                  <td style={{ padding:"13px 16px",
-                    fontSize:13.5, fontWeight:700, color:"#555" }}>
-                    {fmt(filtered.reduce((s,p)=>s+p.monthly,0))}
-                  </td>
-                  <td style={{ padding:"13px 16px",
-                    fontSize:13.5, fontWeight:700, color:"#E07070" }}>
-                    -{fmt(filtered.reduce((s,p)=>s+p.tax,0))}
-                  </td>
-                  <td style={{ padding:"13px 16px",
-                    fontSize:13.5, fontWeight:700, color:"#4CAF82" }}>
-                    {fmt(filtered.reduce((s,p)=>s+p.net_pay,0))}
+                  <td><span className="dept-badge" style={{background:ds.bg,color:ds.text,borderColor:ds.border}}>{emp.department}</span></td>
+                  <td className="right">{fmt(emp.annual)}</td>
+                  <td className="right">{fmtD(emp.monthly)}</td>
+                  <td className="right"><span className="tax-amt">-{fmtD(emp.monthly_tax)}</span></td>
+                  <td className="right"><span className="net-pay">{fmtD(emp.monthly_net)}</span></td>
+                  <td><span className={`status-dot ${!active?"inactive":""}`}><span className="dot"></span>{emp.status}</span></td>
+                  <td>
+                    <button className="btn-view-slip" onClick={() => setSlip(emp)}>
+                      View Slip
+                    </button>
                   </td>
                 </tr>
-              </tfoot>
-            </table>
-          </div>
-        </>
-      )}
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="total-row">
+              <td colSpan={2}>Total ({filtered.length} employees)</td>
+              <td className="right">{fmt(filtered.reduce((s,e)=>s+e.annual,0))}</td>
+              <td className="right">{fmtD(filtered.reduce((s,e)=>s+e.monthly,0))}</td>
+              <td className="right" style={{color:"#E07070"}}>-{fmtD(filtered.reduce((s,e)=>s+e.monthly_tax,0))}</td>
+              <td className="right" style={{fontWeight:700}}>{fmtD(filtered.reduce((s,e)=>s+e.monthly_net,0))}</td>
+              <td colSpan={2}></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
 
-      {/* ── DEPARTMENT SUMMARY TAB ── */}
-      {activeTab === "departments" && (
-        <div style={{ background:"#fff", border:"1.5px solid #EDECEA",
-          borderRadius:16, overflow:"hidden" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead>
-              <tr style={{ background:"#F7F6F2" }}>
-                {["Department","Headcount","Monthly Cost","Annual Cost","Avg Salary"].map(h => (
-                  <th key={h} style={{ padding:"13px 16px", textAlign:"left",
-                    fontSize:11.5, fontWeight:600, color:"#888",
-                    textTransform:"uppercase", letterSpacing:".5px",
-                    borderBottom:"1.5px solid #EDECEA" }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {deptSummary.map((d, i) => {
-                const ds  = getDeptStyle(d.department);
-                const avg = Math.round(d.annual_cost / d.headcount);
-                const pct = Math.round((d.annual_cost / (totals.annual_budget||1)) * 100);
-                return (
-                  <tr key={i} style={{ cursor:"default" }}>
-                    <td style={{ padding:"16px", borderBottom:"1.5px solid #F7F6F2" }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                        <div style={{ width:10, height:10, borderRadius:2,
-                          background:ds.text }}/>
-                        <span style={{ fontSize:13.5, fontWeight:500,
-                          color:"#1C1C1E" }}>{d.department}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding:"16px",
-                      borderBottom:"1.5px solid #F7F6F2",
-                      fontSize:13.5, color:"#555" }}>
-                      {d.headcount} people
-                    </td>
-                    <td style={{ padding:"16px",
-                      borderBottom:"1.5px solid #F7F6F2",
-                      fontSize:13.5, fontWeight:600, color:"#1C1C1E" }}>
-                      {fmt(d.monthly_cost)}
-                    </td>
-                    <td style={{ padding:"16px",
-                      borderBottom:"1.5px solid #F7F6F2" }}>
-                      <div>
-                        <span style={{ fontSize:13.5, fontWeight:600,
-                          color:"#1C1C1E" }}>{fmt(d.annual_cost)}</span>
-                        <div style={{ marginTop:6, height:5, borderRadius:3,
-                          background:"#F0EEE8", overflow:"hidden" }}>
-                          <div style={{ height:"100%", borderRadius:3,
-                            background:ds.text, width:`${pct}%`,
-                            transition:"width .4s" }}/>
-                        </div>
-                        <span style={{ fontSize:11, color:"#bbb" }}>{pct}% of total</span>
-                      </div>
-                    </td>
-                    <td style={{ padding:"16px",
-                      borderBottom:"1.5px solid #F7F6F2",
-                      fontSize:13.5, color:"#4CAF82", fontWeight:600 }}>
-                      {fmt(avg)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      <p style={{fontSize:"11.5px",color:"#bbb",textAlign:"center",marginTop:"8px"}}>
+        * Tax calculations are estimates only (20% flat rate).
+      </p>
+
+      {/* ── SALARY SLIP MODAL ── */}
+      {slip && (
+        <div className="slip-overlay" onClick={() => setSlip(null)}>
+          <div className="slip-modal" onClick={e => e.stopPropagation()}>
+
+            {/* Dark header */}
+            <div className="slip-header">
+              <h3>WorkFlow HR</h3>
+              <p>Salary Slip · {month}</p>
+            </div>
+
+            <div className="slip-body">
+              {/* Employee info card */}
+              <div className="slip-emp-row">
+                <div className="slip-emp-avatar" style={{background:getAvatar(slip.name).bg, color:getAvatar(slip.name).color}}>
+                  {getInitials(slip.name)}
+                </div>
+                <div>
+                  <div className="slip-emp-name">{slip.name}</div>
+                  <div className="slip-emp-meta">{slip.role} · {slip.department}</div>
+                  <div className="slip-emp-meta" style={{marginTop:"2px"}}>Pay Period: {month}</div>
+                </div>
+              </div>
+
+              {/* Earnings */}
+              <p className="slip-section-label">Earnings</p>
+              <div className="slip-row">
+                <span className="label">Annual Salary</span>
+                <span className="value">{fmt(slip.annual)}</span>
+              </div>
+              <div className="slip-row">
+                <span className="label">Monthly Gross</span>
+                <span className="value">{fmtD(slip.monthly)}</span>
+              </div>
+
+              {/* Deductions */}
+              <p className="slip-section-label">Deductions</p>
+              <div className="slip-row tax-row">
+                <span className="label">Income Tax (Est. 20%)</span>
+                <span className="value">- {fmtD(slip.monthly_tax)}</span>
+              </div>
+
+              {/* Net pay */}
+              <div className="slip-total">
+                <span className="label">NET PAY</span>
+                <span className="value">{fmtD(slip.monthly_net)}</span>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="slip-footer">
+              <button className="btn-slip-close" onClick={() => setSlip(null)}>Close</button>
+              <button className="btn-slip-download" onClick={() => window.print()}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download PDF
+              </button>
+            </div>
+            <p className="slip-note">* Estimates only. Consult a payroll professional for accuracy.</p>
+          </div>
         </div>
       )}
-    </div>
+
+    </div></>
   );
 }
