@@ -3,8 +3,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from "recharts";
-import LoginPage from "./LoginPage";   // ← JWT: Import Login
+import LoginPage from "./LoginPage";
+import PayrollPage from "./PayrollPage";
 import AIChatPage from "./AIChatPage"
+
 // ──────────────────────────────────────────────
 // FASTAPI BACKEND URL
 // ──────────────────────────────────────────────
@@ -605,6 +607,8 @@ export default function App() {
             </>
 		  ) : activeNav === "ai-assistant" ? (
 		  <AIChatPage user={user} />
+		  ) : activeNav === "payroll" ? (      // ← ADD THIS LINE
+          <PayrollPage />
 		) : (
 		  <div className="empty-state" style={{padding:"80px 20px"}}>
 			<p style={{fontSize:"16px",color:"#bbb"}}>{activeNav}" coming soon</p>
