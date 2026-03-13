@@ -1,16 +1,94 @@
-# React + Vite
+Hi, I'm Anil Mikkili 👋
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+# WorkFlow HR — AI-Powered HR Management System
 
-Currently, two official plugins are available:
+Full-stack HR Management System with an AI assistant that answers natural language questions about real employee data. 
+Built with React, FastAPI, PostgreSQL, and LangChain — deployed on Render with CI/CD.
+## Live Demo
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **App:** https://employee-management-1rvw.onrender.com
+- **API Docs:** https://employee-api-f3hl.onrender.com/docs
 
-## React Compiler
+## Demo Login:
+Email:    admin@company.com
+Password: admin123
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+>Hosted on Render free tier — first load takes ~30 seconds to wake up (cold start).
 
-## Expanding the ESLint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+| Layer 	      |                   Tool                    |
+|-----------------|-------------------------------------------|
+| Frontend 	      | React 18, Recharts                        |
+| Backend API     | FastAPI, Pydantic, Uvicorn                |
+| Database        | PostgreSQL, asyncpg                       |
+| AI Assistant    | LangChain, Groq (Llama 3.3 70B)           |
+| Authentication  | JWT (python-jose), bcrypt (passlib)       |
+| Deployment      | Render (Static + Web Service + PostgreSQL)|
+| CI/CD           | GitHub → Render auto-deploy on push       |
+
+
+## Features
+
+### AI HR Assistant
+- Ask natural language questions about your employees
+- AI reads real-time PostgreSQL data as context
+- Example queries:
+  - *"Who earns the most in the company?"*
+  - *"What is the average salary in Engineering?"*
+  - *"List all active employees in Integration"*
+- Powered by Groq (Llama 3.3 70B) via LangChain
+
+### Analytics Dashboard
+- Headcount per department (Bar chart)
+- Staff status breakdown — Active / On Leave / Inactive (Pie chart)
+- Average salary per department (Custom bar chart)
+- Salary distribution by range
+- Top 5 earners table
+
+### JWT Authentication
+- Login and registration
+- bcrypt password hashing — no plain passwords stored
+- All sensitive endpoints protected with `Depends(verify_token)`
+- Token stored in localStorage, auto-expires after 60 minutes
+
+## API Endpoints
+
+GET    /                         Health check
+GET    /api/employees            List all employees (filterable)
+GET    /api/employees/{id}       Get single employee
+POST   /api/employees            Create employee         🔒 JWT
+PUT    /api/employees/{id}       Update employee         🔒 JWT
+DELETE /api/employees/{id}       Delete employee         🔒 JWT
+GET    /api/stats                Dashboard statistics    🔒 JWT
+POST   /auth/login               Login → returns JWT token
+POST   /auth/register            Register new user
+GET    /auth/me                  Current user info       🔒 JWT
+POST   /api/ai/chat              AI HR Assistant         🔒 JWT
+
+## Project Structure
+
+employee-ui/                     # React Frontend
+└── src/
+    ├── App.jsx                  # Dashboard, charts, employee table, auth logic
+    ├── LoginPage.jsx            # Login and register forms
+    └── AIChatPage.jsx           # AI assistant chat interface
+
+### Run Locally - Frontend
+```bash
+git clone https://github.com/amikkili/employee-management.git
+cd employee-ui
+npm install
+
+# Update API_BASE in App.jsx and AIChatPage.jsx:
+# const API_BASE = "http://localhost:8000"
+
+npm start
+# App: http://localhost:3000
+
+## Connect
+
+- 🔗 LinkedIn: https://www.linkedin.com/in/anil-mikkili-97b97563/
+- 💻 GitHub: https://github.com/amikkili/
+- 📧 Email: anil.mikkili@gmail.com
